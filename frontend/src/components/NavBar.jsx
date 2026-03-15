@@ -28,7 +28,7 @@ function NavBar({ user }) {
           onClick={() => navigate('/dashboard')}
           className="text-lg font-bold bg-gradient-to-r from-yellow-400 via-orange-400 to-red-400 bg-clip-text text-transparent hover:opacity-80 transition"
         >
-          HireReady
+          PlaceScore
         </button>
 
         {/* Nav Links */}

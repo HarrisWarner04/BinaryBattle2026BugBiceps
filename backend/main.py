@@ -1,5 +1,5 @@
 """
-FastAPI main application for the HireReady Resume Intelligence API.
+FastAPI main application for the PlaceScore Resume Intelligence API.
 Wires all services together and exposes REST endpoints.
 """
 
@@ -30,12 +30,12 @@ from services.db_service import (
 # ---------- App Setup ----------
 
 app = FastAPI(
-    title="HireReady API",
+    title="PlaceScore API",
     description="Resume Intelligence API — ATS scoring, semantic matching, and AI-powered suggestions",
     version="1.0.0",
 )
 
-# Support comma-separated origins for production (e.g. "https://hireready.com,https://www.hireready.com")
+# Support comma-separated origins for production (e.g. "https://placescore.in,https://www.placescore.in")
 _frontend_origins = os.getenv("FRONTEND_URL", "http://localhost:5173")
 ALLOWED_ORIGINS = [o.strip() for o in _frontend_origins.split(",") if o.strip()]
 # Always include localhost for local dev
@@ -107,7 +107,7 @@ async def _auto_update_placescore(uid: str):
 @app.get("/")
 async def root():
     """Health check endpoint."""
-    return {"status": "ok", "service": "HireReady Resume Intelligence API", "version": "1.0.0"}
+    return {"status": "ok", "service": "PlaceScore Resume Intelligence API", "version": "1.0.0"}
 
 
 @app.post("/analyse-resume")
