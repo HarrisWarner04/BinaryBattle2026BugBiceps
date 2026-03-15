@@ -1,5 +1,5 @@
 """
-FastAPI main application for the PlaceScore Resume Intelligence API.
+FastAPI main application for the HireReady Resume Intelligence API.
 Wires all services together and exposes REST endpoints.
 """
 
@@ -30,7 +30,7 @@ from services.db_service import (
 # ---------- App Setup ----------
 
 app = FastAPI(
-    title="PlaceScore API",
+    title="HireReady API",
     description="Resume Intelligence API — ATS scoring, semantic matching, and AI-powered suggestions",
     version="1.0.0",
 )
@@ -107,7 +107,7 @@ async def _auto_update_placescore(uid: str):
 @app.get("/")
 async def root():
     """Health check endpoint."""
-    return {"status": "ok", "service": "PlaceScore Resume Intelligence API", "version": "1.0.0"}
+    return {"status": "ok", "service": "HireReady Resume Intelligence API", "version": "1.0.0"}
 
 
 @app.post("/analyse-resume")

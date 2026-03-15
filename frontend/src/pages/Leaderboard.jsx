@@ -102,7 +102,7 @@ function Leaderboard({ user }) {
         {/* Header */}
         <div className="text-center space-y-2">
           <h1 className="text-3xl font-black bg-gradient-to-r from-yellow-400 via-orange-400 to-red-400 bg-clip-text text-transparent">
-            🏆 PlaceScore Leaderboard
+            🏆 HireReady Leaderboard
           </h1>
           <p className="text-surface-400">
             Top candidates ranked by PlaceScore — for recruiters & companies

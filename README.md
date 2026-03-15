@@ -1,6 +1,6 @@
-# PlaceScore — AI-Powered Placement Readiness Platform
+# HireReady — AI-Powered Placement Readiness Platform
 
-> Know your placement readiness. Upload your resume, connect GitHub, take AI interviews — get a single score that ranks you.
+> Know your placement readiness. Upload your resume, connect GitHub, take AI interviews — get a single PlaceScore that ranks you.
 
 ## Quick Start
 
