@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+*.whl
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# Environment variables (NEVER push real keys)
+backend/.env
+frontend/.env
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ChromaDB — KEEP committed for Railway (pre-seeded vectors, no re-embedding needed)
+# Do NOT add backend/chroma_db/ here
