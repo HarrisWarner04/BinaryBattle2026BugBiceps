@@ -35,9 +35,9 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# Support comma-separated origins for production (e.g. "https://placescore.in,https://www.placescore.in")
+# Support comma-separated origins for production
 _frontend_origins = os.getenv("FRONTEND_URL", "http://localhost:5173")
-ALLOWED_ORIGINS = [o.strip() for o in _frontend_origins.split(",") if o.strip()]
+ALLOWED_ORIGINS = [o.strip().rstrip("/") for o in _frontend_origins.split(",") if o.strip()]
 # Always include localhost for local dev
 for _local in ["http://localhost:5173", "http://localhost:3000"]:
     if _local not in ALLOWED_ORIGINS:
