@@ -28,23 +28,34 @@ def _init_firebase():
         return
 
     try:
-        # Check if a service account JSON is available
-        service_account_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            "firebase-service-account.json"
-        )
+        storage_bucket = os.getenv("FIREBASE_STORAGE_BUCKET", "")
 
-        if os.path.exists(service_account_path):
-            cred = credentials.Certificate(service_account_path)
+        # Option 1: FIREBASE_SERVICE_ACCOUNT env var (JSON string — for Railway/cloud)
+        sa_json = os.getenv("FIREBASE_SERVICE_ACCOUNT")
+        if sa_json:
+            sa_dict = json.loads(sa_json)
+            cred = credentials.Certificate(sa_dict)
             _firebase_app = firebase_admin.initialize_app(cred, {
-                "storageBucket": os.getenv("FIREBASE_STORAGE_BUCKET", ""),
+                "storageBucket": storage_bucket,
             })
         else:
-            # Use default credentials (for Cloud Run, etc.)
-            try:
-                _firebase_app = firebase_admin.get_app()
-            except ValueError:
-                _firebase_app = firebase_admin.initialize_app()
+            # Option 2: Local service account JSON file
+            service_account_path = os.path.join(
+                os.path.dirname(os.path.dirname(__file__)),
+                "firebase-service-account.json"
+            )
+
+            if os.path.exists(service_account_path):
+                cred = credentials.Certificate(service_account_path)
+                _firebase_app = firebase_admin.initialize_app(cred, {
+                    "storageBucket": storage_bucket,
+                })
+            else:
+                # Option 3: Application Default Credentials (Cloud Run, etc.)
+                try:
+                    _firebase_app = firebase_admin.get_app()
+                except ValueError:
+                    _firebase_app = firebase_admin.initialize_app()
 
         _db = firestore.client()
 

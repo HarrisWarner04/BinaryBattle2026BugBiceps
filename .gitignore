@@ -16,6 +16,7 @@ env/
 # Environment variables (NEVER push real keys)
 backend/.env
 frontend/.env
+backend/firebase-service-account.json
 
 # Node
 frontend/node_modules/
