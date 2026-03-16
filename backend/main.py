@@ -497,6 +497,56 @@ from services.db_service import (
 )
 
 
+@app.post("/interview/transcribe")
+async def interview_transcribe(audio: UploadFile = File(...)):
+    """Transcribe audio using OpenAI Whisper API. Replaces broken Web Speech API."""
+    import tempfile
+    from services.openai_client import _get_client
+
+    try:
+        client = _get_client()
+        # Write uploaded audio to temp file
+        suffix = ".webm"
+        if audio.filename:
+            suffix = "." + audio.filename.rsplit(".", 1)[-1] if "." in audio.filename else ".webm"
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, mode='wb') as tmp:
+            content = await audio.read()
+            tmp.write(content)
+            tmp_path = tmp.name
+
+        # Transcribe with Whisper
+        with open(tmp_path, "rb") as f:
+            transcription = client.audio.transcriptions.create(
+                model="whisper-1",
+                file=f,
+                language="en",
+                prompt="Interview answer about software engineering, projects, and technical skills.",
+            )
+
+        # Cleanup temp file
+        try:
+            os.unlink(tmp_path)
+        except:
+            pass
+
+        # Filter common Whisper hallucinations on silence/noise
+        text = transcription.text.strip()
+        hallucinations = {
+            "shabbat shalom", "thank you for watching", "thanks for watching",
+            "please subscribe", "see you next time", "bye bye", "you",
+            "the end", "silence", "music", "applause", "laughter",
+            "thank you", "thanks", "...", ".", "",
+        }
+        if text.lower().rstrip(".!?,") in hallucinations:
+            return {"text": "", "success": True}
+
+        return {"text": text, "success": True}
+    except Exception as e:
+        print(f"⚠️ Whisper transcription error: {e}")
+        return {"text": "", "success": False, "error": str(e)}
+
+
 @app.post("/interview/generate-questions")
 async def interview_generate_questions(
     uid: str = Form(...),

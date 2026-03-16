@@ -78,6 +78,12 @@ query {
         description
         url
         primaryLanguage { name }
+        languages(first: 10, orderBy: {field: SIZE, direction: DESC}) {
+          edges {
+            size
+            node { name }
+          }
+        }
         stargazerCount
         forkCount
         pushedAt
@@ -167,6 +173,16 @@ async def fetch_github_repos(access_token: str) -> dict:
             if repo.get("object") and repo["object"].get("text"):
                 readme_text = repo["object"]["text"][:2000]
 
+            # Extract language breakdown
+            lang_edges = repo.get("languages", {}).get("edges", [])
+            total_size = sum(e.get("size", 0) for e in lang_edges)
+            languages_breakdown = []
+            for e in lang_edges:
+                lang_name = e.get("node", {}).get("name", "")
+                lang_size = e.get("size", 0)
+                pct = round(lang_size / max(total_size, 1) * 100, 1)
+                languages_breakdown.append(f"{lang_name} ({pct}%)")
+
             # Extract topics
             topics = []
             for t in repo.get("repositoryTopics", {}).get("nodes", []):
@@ -189,6 +205,7 @@ async def fetch_github_repos(access_token: str) -> dict:
                 "description": repo.get("description", "") or "",
                 "url": repo.get("url", ""),
                 "language": repo.get("primaryLanguage", {}).get("name", "Unknown") if repo.get("primaryLanguage") else "Unknown",
+                "languages_breakdown": languages_breakdown,
                 "stars": repo.get("stargazerCount", 0),
                 "forks": repo.get("forkCount", 0),
                 "pushed_at": repo.get("pushedAt", ""),
@@ -200,6 +217,77 @@ async def fetch_github_repos(access_token: str) -> dict:
         return {"login": login, "repos": repos}
 
 
+# ---------- Fetch Key Source Files ----------
+
+# Priority file patterns to fetch (order matters)
+_KEY_FILE_PATTERNS = [
+    # Entry points
+    "main.py", "app.py", "server.py", "index.js", "index.ts", "app.js", "app.ts",
+    "server.js", "server.ts", "main.go", "main.rs", "Main.java", "Program.cs",
+    # Core logic
+    "routes.py", "views.py", "models.py", "schema.py", "api.py",
+    "routes.js", "routes.ts", "controllers.js", "controllers.ts",
+    # Config
+    "Dockerfile", "docker-compose.yml", "requirements.txt", "package.json",
+]
+
+
+def _pick_key_files(file_list: list[str], max_files: int = 3) -> list[str]:
+    """Pick the most important source files from the file tree."""
+    picked = []
+    # First pass: exact matches
+    for pattern in _KEY_FILE_PATTERNS:
+        for f in file_list:
+            basename = f.rsplit("/", 1)[-1] if "/" in f else f
+            if basename == pattern and f not in picked:
+                picked.append(f)
+                if len(picked) >= max_files:
+                    return picked
+    # Second pass: any .py, .js, .ts, .java, .go source files
+    source_exts = (".py", ".js", ".ts", ".java", ".go", ".rs", ".cpp", ".c")
+    for f in file_list:
+        if any(f.endswith(ext) for ext in source_exts) and f not in picked:
+            # Skip test/config files
+            basename = f.rsplit("/", 1)[-1] if "/" in f else f
+            if not basename.startswith("test_") and basename not in ("setup.py", "conftest.py"):
+                picked.append(f)
+                if len(picked) >= max_files:
+                    return picked
+    return picked
+
+
+async def fetch_file_content(login: str, repo_name: str, file_path: str, access_token: str) -> str:
+    """Fetch a single file's content from GitHub REST API."""
+    url = f"https://api.github.com/repos/{login}/{repo_name}/contents/{file_path}"
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                url,
+                headers={
+                    "Authorization": f"Bearer {access_token}",
+                    "Accept": "application/vnd.github.raw+json",
+                },
+                timeout=10.0,
+            )
+            if response.status_code == 200:
+                return response.text[:1500]  # Cap at 1500 chars per file
+    except Exception as e:
+        print(f"    ⚠️ Could not fetch {file_path}: {e}")
+    return ""
+
+
+async def fetch_key_source_files(login: str, repo_name: str, file_list: list[str], access_token: str) -> list[dict]:
+    """Fetch source code of key files from a repo."""
+    key_files = _pick_key_files(file_list)
+    result = []
+    for fp in key_files:
+        content = await fetch_file_content(login, repo_name, fp, access_token)
+        if content:
+            result.append({"path": fp, "content": content})
+            print(f"    📄 Fetched: {fp} ({len(content)} chars)")
+    return result
+
+
 # ---------- Enhanced AI Code Review ----------
 
 def review_repo(repo: dict, target_company: str = "a top tech company") -> dict:
@@ -209,13 +297,24 @@ def review_repo(repo: dict, target_company: str = "a top tech company") -> dict:
     """
     file_structure = ", ".join(repo.get("file_list", [])[:50]) or "unknown"
     topics = ", ".join(repo.get("topics", [])) or "none"
+    langs = ", ".join(repo.get("languages_breakdown", [])) or repo.get("language", "Unknown")
+
+    # Build source code section if available
+    source_section = ""
+    source_files = repo.get("source_files", [])
+    if source_files:
+        source_section = "\n\nACTUAL SOURCE CODE (review this carefully):\n"
+        for sf in source_files:
+            source_section += f"\n--- {sf['path']} ---\n{sf['content']}\n"
 
     prompt = f"""You are a senior {target_company} engineer conducting a code review.
-Repository: '{repo['name']}', language: '{repo['language']}', topics: [{topics}],
+Repository: '{repo['name']}', languages used: [{langs}], topics: [{topics}],
 file structure: [{file_structure}],
-README: '{repo['readme'][:1500]}'
+README: '{repo['readme'][:1000]}'
+{source_section}
 
-Analyse deeply and return ONLY valid JSON:
+Analyse deeply based on the ACTUAL code provided above. Be specific — reference actual function names,
+patterns, and issues you see in the code. Return ONLY valid JSON:
 {{
   "code_quality": 0-10,
   "documentation": 0-10,
@@ -226,12 +325,12 @@ Analyse deeply and return ONLY valid JSON:
   "architecture_pattern": "string describing the architecture pattern used",
   "design_patterns_used": ["string"],
   "skills_demonstrated": [
-    {{ "skill": "string", "proficiency": "beginner/intermediate/advanced", "evidence": "string" }}
+    {{ "skill": "string", "proficiency": "beginner/intermediate/advanced", "evidence": "string — cite specific code/functions" }}
   ],
   "issues": [
-    {{ "severity": "high/medium/low", "category": "bugs/security/performance/style", "title": "string", "description": "string", "fix": "string" }}
+    {{ "severity": "high/medium/low", "category": "bugs/security/performance/style", "title": "string", "description": "string — reference specific code", "fix": "string" }}
   ],
-  "strengths": ["string"],
+  "strengths": ["string — be specific, reference actual code"],
   "what_this_shows_about_candidate": "string",
   "interview_talking_points": ["2-3 specific things about this repo that would make strong interview questions"]
 }}"""
@@ -262,6 +361,7 @@ def review_all_repos(repos: list[dict], target_company: str = "a top tech compan
         review["repo_name"] = repo["name"]
         review["repo_url"] = repo.get("url", "")
         review["language"] = repo["language"]
+        review["languages_breakdown"] = repo.get("languages_breakdown", [])
         reviews.append(review)
     return reviews
 
@@ -410,8 +510,13 @@ async def run_github_pipeline(
             "error": "No public repositories found",
         }
 
-    # 2. Review each repo
-    print(f"🔍 Reviewing {len(github_data['repos'])} repos...")
+    # 2. Fetch source code and review each repo
+    login = github_data["login"]
+    print(f"🔍 Fetching source code & reviewing {len(github_data['repos'])} repos...")
+    for repo in github_data["repos"]:
+        print(f"  📥 Fetching source for: {repo['name']}...")
+        source_files = await fetch_key_source_files(login, repo["name"], repo.get("file_list", []), access_token)
+        repo["source_files"] = source_files
     reviews = review_all_repos(github_data["repos"], target_company)
 
     # 3. Verify skills
@@ -422,13 +527,11 @@ async def run_github_pipeline(
     print("📊 Generating aggregated assessment...")
     aggregated = generate_aggregated_assessment(reviews, parsed_resume, target_company, target_role)
 
-    # 5. Calculate score — prefer aggregated, fallback to computed
-    github_score = aggregated.get("overall_github_score", calculate_github_score(reviews))
-    if isinstance(github_score, str):
-        try:
-            github_score = float(github_score)
-        except ValueError:
-            github_score = calculate_github_score(reviews)
+    # 5. Calculate score — ALWAYS use deterministic calculation (LLM scores are unreliable)
+    github_score = calculate_github_score(reviews)
+    llm_score = aggregated.get("overall_github_score", None)
+    if llm_score is not None:
+        print(f"  ℹ️ LLM suggested score: {llm_score}/100 (ignored — using deterministic)")
     print(f"📊 GitHub Score: {github_score}/100")
 
     # 6. Extract interview talking points across all repos
