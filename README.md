@@ -2,10 +2,13 @@
 
 <div align="center">
 
+[![Live Demo](https://img.shields.io/badge/🚀_Live_Demo-hireready.bugbiceps.in-4F46E5?style=for-the-badge&logo=vercel&logoColor=white)](https://hireready.bugbiceps.in)
+
 [![CI Pipeline](https://github.com/HarrisWarner04/HireReady/actions/workflows/ci.yml/badge.svg)](https://github.com/HarrisWarner04/HireReady/actions/workflows/ci.yml)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg?style=flat&logo=FastAPI&logoColor=white)](https://fastapi.tiangolo.com)
 [![Python 3.11](https://img.shields.io/badge/Python-3.11+-3776AB.svg?style=flat&logo=Python&logoColor=white)](https://python.org)
-[![OpenAI GPT-4o-mini](https://img.shields.io/badge/OpenAI-GPT--4o--mini-412991.svg?style=flat&logo=OpenAI&logoColor=white)](https://platform.openai.com)
+[![Groq](https://img.shields.io/badge/Groq-Llama_3.3_70B-F55036.svg?style=flat&logo=groq&logoColor=white)](https://groq.com)
+[![Google Gemini](https://img.shields.io/badge/Google-Gemini_Flash-4285F4.svg?style=flat&logo=google&logoColor=white)](https://ai.google.dev)
 [![ChromaDB](https://img.shields.io/badge/VectorDB-ChromaDB-FF6F00.svg?style=flat)](https://www.trychroma.com)
 [![React 18](https://img.shields.io/badge/Frontend-React_18_%2B_Vite-61DAFB.svg?style=flat&logo=React&logoColor=black)](https://react.dev)
 [![MediaPipe](https://img.shields.io/badge/Vision-MediaPipe_FaceMesh-0078D4.svg?style=flat&logo=Google&logoColor=white)](https://developers.google.com/mediapipe)
@@ -13,7 +16,7 @@
 
 **An end-to-end intelligent evaluation platform that benchmarks candidate job readiness through automated ATS resume parsing, vector-based semantic role matching, multi-modal AI mock interviews with computer vision proctoring, and deep GitHub codebase intelligence.**
 
-[Key Features](#-key-features) • [System Architecture](#-system-architecture) • [AI Subsystems](#-ai-subsystems-deep-dive) • [PlaceScore™ Formula](#-placescore-composite-metric) • [API Reference](#-api-reference) • [Quick Start](#-quick-start)
+[🌐 Live Application](https://hireready.bugbiceps.in) • [Key Features](#-key-features) • [System Architecture](#-system-architecture) • [AI Subsystems](#-ai-subsystems-deep-dive) • [PlaceScore™ Formula](#-placescore-composite-metric) • [Quick Start](#-quick-start)
 
 </div>
 
@@ -30,12 +33,29 @@ Traditional tech campus placements and recruitment suffer from three critical bo
 
 ---
 
+## 🌟 Recruiter & Evaluator Quick Tour
+
+Try the live platform at **[hireready.bugbiceps.in](https://hireready.bugbiceps.in)**:
+
+1. **📄 ATS Resume Scanner & Jake's LaTeX Generator**:
+   - Upload any PDF resume $\rightarrow$ get an instant, deterministic 6-factor ATS breakdown (0–100) and role semantic match against target companies (TCS, Google, Amazon, Infosys, etc.).
+   - Generates an Overleaf-compatible LaTeX `.tex` export formatted with the battle-tested Jake's Resume structure.
+2. **🐙 GitHub Codebase AST Verifier**:
+   - Audits public GitHub repositories, analyzes commit recency and language distributions, and cross-references claimed resume skills against real source code evidence.
+3. **🎙️ Multi-Modal AI Mock Interviewer**:
+   - Real-time **MediaPipe FaceMesh (478 landmarks)** tracks gaze, head pose, and eye contact.
+   - Ultra-low latency voice transcription (Whisper) + adaptive, context-aware technical and behavioral questions generated directly from candidate resume projects.
+4. **🏆 Talent Pool & Recruiter JD Matcher**:
+   - Recruiters can paste raw Job Descriptions into the Leaderboard to semantically rank candidate profiles using 1,536-dimensional vector similarity blended with PlaceScore™.
+
+---
+
 ## 🚀 Key Features
 
 - 📄 **Deterministic & Neural ATS Scoring**: 6-factor deterministic scoring breakdown (100 pts) combining algorithmic Porter-like suffix-stripping keyword extraction with dense semantic similarity against target Job Descriptions.
-- 🧬 **ChromaDB Vector RAG Search**: 1,536-dimensional embeddings (`text-embedding-3-small`) index benchmark roles and compute real-time cosine similarity across candidate skill vectors.
+- 🧬 **ChromaDB Vector RAG Search**: High-dimensional embeddings index benchmark roles and compute real-time cosine similarity across candidate skill vectors.
 - 🎙️ **Multi-Modal AI Mock Interviewer**:
-  - **Speech-to-Text**: OpenAI Whisper STT with hallucination rejection heuristics.
+  - **Speech-to-Text**: Whisper STT with low-entropy hallucination rejection heuristics.
   - **Vision Proctoring**: MediaPipe FaceLandmarker running real-time 478-point facial mesh tracking for gaze detection, eye-contact percentage, and head-pose attention tracking.
   - **Adaptive Question Engine**: 8 targeted interview questions dynamically generated from the candidate's resume, verified GitHub projects, and known target company interview patterns.
 - 🐙 **GitHub Codebase Intelligence Engine**: GraphQL extraction across public repositories, auditing commit cadence, repo structure, test coverage presence, and cross-referencing claimed resume technologies against actual source code evidence.
@@ -62,9 +82,9 @@ flowchart TB
 
     subgraph AI_Engines ["AI & Analytics Subsystems"]
         ATS[Deterministic Stemmer & ATS Scorer]
-        RAG[ChromaDB Vector Store 1536-dim]
-        LLM[OpenAI GPT-4o-mini Structured JSON Engine]
-        Whisper[OpenAI Whisper-1 STT Engine]
+        RAG[ChromaDB Vector Store]
+        LLM[Groq LLaMA 3.3 70B / Gemini Flash Engine]
+        Whisper[Groq Whisper / Whisper-1 STT Engine]
         GH[GitHub GraphQL Code Reviewer & Verifier]
         Latex[Jake's Resume LaTeX Generator]
     end
@@ -101,10 +121,10 @@ Unlike naive LLM-only evaluators that suffer from non-deterministic grading vari
 | Sub-Score Component | Weight | Implementation Methodology |
 | :--- | :---: | :--- |
 | **Keyword Match** | `25 pts` | Deterministic suffix-stripping stemmer with stop-word filtration against JD tokens |
-| **Semantic Similarity** | `25 pts` | Cosine similarity: $\frac{\mathbf{u} \cdot \mathbf{v}}{\|\mathbf{u}\|_2 \|\mathbf{v}\|_2}$ via `text-embedding-3-small` vectors |
+| **Semantic Similarity** | `25 pts` | Cosine similarity: $\frac{\mathbf{u} \cdot \mathbf{v}}{\|\mathbf{u}\|_2 \|\mathbf{v}\|_2}$ via dense vector embeddings |
 | **Format & Structure** | `20 pts` | Regex heuristics auditing contact fields, section hierarchy, length & typographical metrics |
 | **Skills Coverage** | `15 pts` | Algorithmic set intersection over stemmed candidate vs target skill taxonomies |
-| **Experience Relevance**| `10 pts` | Zero-temperature LLM evaluation grounded strictly on parsed responsibilities & tech stack |
+| **Experience Relevance**| `10 pts` | Zero-temperature evaluation grounded strictly on parsed responsibilities & tech stack |
 | **Education Match** | `5 pts` | Degree & coursework relevance verification against role prerequisites |
 
 $$\text{Total ATS Score} = \sum_{i=1}^{6} \text{SubScore}_i \quad (\text{Range: } 0 - 100)$$
@@ -115,8 +135,8 @@ $$\text{Total ATS Score} = \sum_{i=1}^{6} \text{SubScore}_i \quad (\text{Range: 
 
 ```
 [Webcam Stream] ──> MediaPipe FaceLandmarker ──> Eye Contact % & Attention Loss Counter
-[Microphone]   ──> WebM Audio Buffer         ──> Whisper-1 STT (w/ Hallucination Filter)
-[Profile Data] ──> Resume + GitHub Context   ──> GPT-4o-mini Dynamic Interviewer
+[Microphone]   ──> WebM Audio Buffer         ──> Whisper STT (w/ Hallucination Filter)
+[Profile Data] ──> Resume + GitHub Context   ──> Dynamic Interviewer LLM
                                                         │
                                                         ▼
                                            8-Question Structured Rubric:
@@ -127,7 +147,7 @@ $$\text{Total ATS Score} = \sum_{i=1}^{6} \text{SubScore}_i \quad (\text{Range: 
                                            • 1x Career Goals & Company Fit
 ```
 
-- **Whisper Hallucination Filter**: Audio silence or background noise often causes Whisper-1 to hallucinate phrases (*"Thank you for watching"*, *"Shabbat Shalom"*). HireReady implements a post-transcription filter that flags and prunes low-entropy hallucination signatures.
+- **Whisper Hallucination Filter**: Audio silence or background noise often causes Whisper STT to hallucinate phrases (*"Thank you for watching"*, *"Shabbat Shalom"*). HireReady implements a post-transcription filter that flags and prunes low-entropy hallucination signatures.
 - **Contextual Rubric Evaluation**: Answers are scored across Technical Accuracy, Communication Clarity, and STAR methodology alignment, producing constructive feedback and automated follow-up probing questions.
 
 ---
@@ -173,7 +193,7 @@ $$\mathbf{Score}_{\text{blended}} = (0.60 \times \text{JD Cosine Match}) + (0.40
 ### AI Mock Interview
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `POST` | `/interview/transcribe` | Audio file transcription via OpenAI Whisper with hallucination filtering. |
+| `POST` | `/interview/transcribe` | Audio file transcription via Whisper with hallucination filtering. |
 | `POST` | `/interview/generate-questions`| Generates 8 personalized interview questions using Resume + GitHub context. |
 | `POST` | `/interview/evaluate-answer` | Evaluates answer against ideal key points and rubric. |
 | `POST` | `/interview/submit-session` | Submits complete session with eye contact metrics and generates comprehensive report. |
@@ -200,7 +220,7 @@ HireReady/
 │   ├── data/
 │   │   └── job_roles.json         # Benchmark roles corpus for RAG vector search
 │   ├── rag/
-│   │   ├── embedder.py            # OpenAI embedding wrapper (1536-dim)
+│   │   ├── embedder.py            # Embedding wrapper
 │   │   ├── seed.py                # ChromaDB vector collection seeder
 │   │   └── setup.py               # Persistent ChromaDB client setup
 │   ├── services/
@@ -209,7 +229,7 @@ HireReady/
 │   │   ├── github_service.py      # GitHub GraphQL audit & skill verifier
 │   │   ├── interview_service.py   # AI mock interviewer & rubric evaluator
 │   │   ├── latex_generator.py     # Jake's Resume LaTeX compiler
-│   │   ├── openai_client.py       # OpenAI GPT-4o-mini & Whisper client singleton
+│   │   ├── openai_client.py       # Multi-provider AI client (Groq, Gemini, OpenAI)
 │   │   ├── pdf_extractor.py       # Robust PDF text extraction via pdfplumber
 │   │   ├── resume_parser.py       # Structured JSON LLM resume extraction
 │   │   ├── semantic_matcher.py    # Vector cosine similarity matching
@@ -218,6 +238,7 @@ HireReady/
 │   │   ├── test_api.py            # API smoke & route validation tests
 │   │   ├── test_ats_scorer.py     # Stemming, tokenization & ATS score unit tests
 │   │   └── test_latex_generator.py# LaTeX escaping & template compilation tests
+│   ├── Dockerfile                 # Container image specification
 │   ├── .env.example               # Backend environment variable template
 │   ├── main.py                    # FastAPI entrypoint & router
 │   └── requirements.txt           # Python dependency specifications
@@ -230,6 +251,7 @@ HireReady/
 │   ├── .env.example               # Frontend environment variable template
 │   ├── package.json               # Frontend dependencies & scripts
 │   └── vite.config.js             # Vite build & bundler configuration
+├── render.yaml                    # Render Web Service Blueprint
 ├── LICENSE                        # MIT License
 └── README.md                      # Project documentation
 ```
@@ -241,7 +263,7 @@ HireReady/
 ### Prerequisites
 - **Python 3.11+**
 - **Node.js 18+** & `npm`
-- **OpenAI API Key** (for GPT-4o-mini, Whisper, and Embeddings)
+- **Groq API Key** / **Gemini API Key** / **OpenAI API Key**
 - **Firebase Project** (Firestore & Auth)
 
 ---
@@ -268,16 +290,9 @@ cp .env.example .env
 
 Edit `backend/.env` with your API credentials:
 ```env
-OPENAI_API_KEY=sk-proj-your-openai-key-here
+GROQ_API_KEY=gsk_your_groq_key_here
+GEMINI_API_KEY=your_gemini_api_key_here
 FRONTEND_URL=http://localhost:5173
-GITHUB_CLIENT_ID=your-github-oauth-client-id       # Optional
-GITHUB_CLIENT_SECRET=your-github-oauth-secret      # Optional
-GITHUB_REDIRECT_URI=http://localhost:8000/github/callback
-```
-
-Seed the ChromaDB vector database (optional — auto-seeds on first startup):
-```bash
-python -m rag.seed
 ```
 
 Run the backend server:
@@ -347,7 +362,7 @@ npm run build
   *Decision*: MediaPipe runs client-side in WebAssembly/WebGL inside the browser, calculating 478 face landmarks at 30 FPS locally and only transmitting aggregated gaze/attention metrics to the API.
 - **Whisper STT with Silence Hallucination Filtering**:
   *Trade-off*: Browser Web Speech API suffers from inconsistent cross-browser compatibility and inaccurate technical terminology recognition.
-  *Decision*: We route recorded audio blobs to OpenAI Whisper-1 with a tailored technical vocabulary prompt and apply a post-processing filter to eliminate low-entropy noise hallucinations.
+  *Decision*: We route recorded audio blobs to Whisper with a tailored technical vocabulary prompt and apply a post-processing filter to eliminate low-entropy noise hallucinations.
 
 ---
 
