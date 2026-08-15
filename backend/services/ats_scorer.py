@@ -50,29 +50,28 @@ def _simple_stem(word: str) -> str:
     w = word.lower().strip()
     if len(w) <= 3:
         return w
+    # Strip trailing 's' first if plural (so applications & application produce identical stems)
+    if w.endswith("s") and len(w) > 3 and not w.endswith("ss"):
+        w = w[:-1]
     # Order matters — try longest suffixes first
-    for suffix in ["-tion", "-ment", "-ness", "-able", "-ible", "-ment",
+    for suffix in ["-tion", "-ment", "-ness", "-able", "-ible",
                    "ation", "tion", "ment", "ness", "able", "ible",
-                   "ings", "ying", "ding", "ting", "ning", "ring",
-                   "ing", "ied", "ies", "ted", "ers", "ist",
+                   "ings", "ing", "ied", "ies", "ted", "ers", "ist",
                    "ed", "er", "ly", "al", "es"]:
         if w.endswith(suffix) and len(w) - len(suffix) >= 3:
             return w[:-len(suffix)]
-    # Strip trailing 's' if it leaves a word of 3+ chars
-    if w.endswith("s") and len(w) > 3 and not w.endswith("ss"):
-        return w[:-1]
     return w
 
 
 def _tokenize_and_stem(text: str) -> set[str]:
     """Tokenize text into stemmed keyword set, removing stop words."""
-    # Split on non-alphanumeric, keep words 2+ chars
-    tokens = re.findall(r'[a-zA-Z][a-zA-Z0-9#+.\-]+', text.lower())
+    # Split on whitespace/punctuation, keeping word tokens with special tech chars (.net, c++, etc.)
+    raw_tokens = re.findall(r'[a-zA-Z][a-zA-Z0-9#+.\-]*', text.lower())
     stemmed = set()
-    for token in tokens:
+    for raw in raw_tokens:
+        token = raw.rstrip(".,;:!?")
         if token not in _STOP_WORDS and len(token) >= 2:
             stemmed.add(_simple_stem(token))
-            # Also keep original for exact matches (e.g. "react", "python")
             stemmed.add(token)
     return stemmed
 
@@ -82,18 +81,18 @@ def _extract_keywords_from_jd_algorithmic(job_description: str) -> list[str]:
     Extract keywords from JD using pure algorithmic approach.
     No LLM involved — fully deterministic.
     """
-    # Tokenize and stem
-    tokens = re.findall(r'[a-zA-Z][a-zA-Z0-9#+.\-]+', job_description.lower())
+    raw_tokens = re.findall(r'[a-zA-Z][a-zA-Z0-9#+.\-]*', job_description.lower())
     keywords = []
     seen_stems = set()
 
-    for token in tokens:
+    for raw in raw_tokens:
+        token = raw.rstrip(".,;:!?")
         if token in _STOP_WORDS or len(token) < 2:
             continue
         stem = _simple_stem(token)
         if stem not in seen_stems:
             seen_stems.add(stem)
-            keywords.append(token)  # Keep original form for readability
+            keywords.append(token)
 
     return keywords
 
