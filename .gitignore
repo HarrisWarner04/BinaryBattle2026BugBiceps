@@ -34,5 +34,6 @@ frontend/dist/
 Thumbs.db
 desktop.ini
 
-# ChromaDB — KEEP committed for Railway (pre-seeded vectors, no re-embedding needed)
-# Do NOT add backend/chroma_db/ here
+# ChromaDB
+backend/chroma_db/
+chroma_db/
