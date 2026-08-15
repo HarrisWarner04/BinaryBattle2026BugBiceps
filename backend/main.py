@@ -62,8 +62,8 @@ async def startup():
         collection = get_job_roles_collection()
         if collection.count() == 0:
             print("📦 ChromaDB is empty — seeding job roles...")
-            import subprocess
-            subprocess.run(["python", "-m", "rag.seed"], cwd=os.path.dirname(__file__))
+            from rag.seed import seed_job_roles
+            seed_job_roles()
             print("✅ ChromaDB seeded successfully.")
         else:
             print(f"✅ ChromaDB already has {collection.count()} job roles.")
@@ -105,6 +105,7 @@ async def _auto_update_placescore(uid: str):
 # ---------- Routes ----------
 
 @app.get("/")
+@app.head("/")
 async def root():
     """Health check endpoint."""
     return {"status": "ok", "service": "HireReady Resume Intelligence API", "version": "1.0.0"}
