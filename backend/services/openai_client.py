@@ -118,7 +118,6 @@ def chat_completion(
                 _init_gemini_genai()
                 import google.generativeai as genai
                 model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
-                # Try gemini-2.0-flash if configured or fallback to gemini-1.5-flash
                 model = genai.GenerativeModel(
                     model_name=model_name,
                     system_instruction=system_prompt if system_prompt else None,
@@ -147,7 +146,7 @@ def chat_completion(
             last_err = e
             if attempt < max_retries:
                 wait = 2 ** (attempt + 1)
-                print(f"  ⏳ {provider.upper()} error (attempt {attempt + 1}/{max_retries}): {str(e)[:80]}. Retrying in {wait}s...")
+                print(f"[AI Retry] {provider.upper()} attempt {attempt + 1}/{max_retries} failed: {str(e)[:80]}. Retrying in {wait}s...")
                 time.sleep(wait)
             else:
                 raise HTTPException(
@@ -170,7 +169,6 @@ def chat_completion_json(
     """
     raw = chat_completion(prompt, system_prompt, temperature, max_retries)
 
-    # Strip markdown code fences if present
     if "```" in raw:
         lines = raw.split("\n")
         cleaned_lines = []
@@ -185,7 +183,6 @@ def chat_completion_json(
     try:
         return json.loads(raw)
     except json.JSONDecodeError:
-        # Try to find JSON object or array within the response
         start_obj = raw.find("{")
         end_obj = raw.rfind("}") + 1
         if start_obj >= 0 and end_obj > start_obj:
@@ -220,7 +217,6 @@ def _local_fallback_embedding(text: str, dim: int = 768) -> list[float]:
         idx = h % dim
         vec[idx] += 1.0
 
-    # L2 normalize
     norm = math.sqrt(sum(x * x for x in vec))
     if norm > 0:
         vec = [x / norm for x in vec]
@@ -230,7 +226,7 @@ def _local_fallback_embedding(text: str, dim: int = 768) -> list[float]:
 def embed_text(text: str) -> list[float]:
     """
     Generate an embedding for a single text.
-    Uses Gemini text-embedding-004 if available, OpenAI if available, or local fallback.
+    Uses Gemini embedding if available, OpenAI if available, or local fallback.
     """
     if not text or not text.strip():
         return [0.0] * 768
@@ -240,14 +236,18 @@ def embed_text(text: str) -> list[float]:
         try:
             _init_gemini_genai()
             import google.generativeai as genai
-            result = genai.embed_content(
-                model="models/text-embedding-004",
-                content=text,
-                task_type="retrieval_document"
-            )
-            return result['embedding']
+            for model_name in ["models/embedding-001", "models/text-embedding-004"]:
+                try:
+                    result = genai.embed_content(
+                        model=model_name,
+                        content=text,
+                        task_type="retrieval_document"
+                    )
+                    return result['embedding']
+                except Exception:
+                    continue
         except Exception as e:
-            print(f"  ⚠️ Gemini embedding error: {str(e)[:80]}. Trying fallback.")
+            print(f"[Embedding Warning] Gemini embedding: {str(e)[:80]}. Using fallback.")
 
     # Option 2: OpenAI Embedding
     if os.getenv("OPENAI_API_KEY"):
@@ -259,7 +259,7 @@ def embed_text(text: str) -> list[float]:
             )
             return response.data[0].embedding
         except Exception as e:
-            print(f"  ⚠️ OpenAI embedding error: {str(e)[:80]}. Trying fallback.")
+            print(f"[Embedding Warning] OpenAI embedding: {str(e)[:80]}. Using fallback.")
 
     # Option 3: Local Fallback (Guaranteed to work without API keys or costs)
     return _local_fallback_embedding(text, dim=768)
@@ -272,21 +272,23 @@ def embed_text_batch(texts: list[str]) -> list[list[float]]:
     if not texts:
         return []
 
-    # Gemini batch embedding
     if os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"):
         try:
             _init_gemini_genai()
             import google.generativeai as genai
-            result = genai.embed_content(
-                model="models/text-embedding-004",
-                content=texts,
-                task_type="retrieval_document"
-            )
-            return result['embedding']
-        except Exception as e:
-            print(f"  ⚠️ Gemini batch embedding error: {str(e)[:80]}. Falling back to sequential.")
+            for model_name in ["models/embedding-001", "models/text-embedding-004"]:
+                try:
+                    result = genai.embed_content(
+                        model=model_name,
+                        content=texts,
+                        task_type="retrieval_document"
+                    )
+                    return result['embedding']
+                except Exception:
+                    continue
+        except Exception:
+            pass
 
-    # OpenAI batch embedding
     if os.getenv("OPENAI_API_KEY"):
         try:
             non_empty = [(i, t) for i, t in enumerate(texts) if t and t.strip()]
@@ -301,8 +303,8 @@ def embed_text_batch(texts: list[str]) -> list[list[float]]:
             for idx, (orig_idx, _) in enumerate(non_empty):
                 results[orig_idx] = response.data[idx].embedding
             return results
-        except Exception as e:
-            print(f"  ⚠️ OpenAI batch embedding error: {str(e)[:80]}. Falling back.")
+        except Exception:
+            pass
 
     return [embed_text(t) for t in texts]
 
@@ -324,7 +326,7 @@ def transcribe_audio(file_path: str) -> str:
                 )
             return transcription.text.strip()
         except Exception as e:
-            print(f"  ⚠️ Groq Whisper error: {e}")
+            print(f"[Transcribe Warning] Groq Whisper: {e}")
 
     # 2. Try OpenAI Whisper
     if os.getenv("OPENAI_API_KEY"):
@@ -339,7 +341,7 @@ def transcribe_audio(file_path: str) -> str:
                 )
             return transcription.text.strip()
         except Exception as e:
-            print(f"  ⚠️ OpenAI Whisper error: {e}")
+            print(f"[Transcribe Warning] OpenAI Whisper: {e}")
 
     # 3. Try Gemini multimodal audio transcription
     if os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"):
@@ -354,7 +356,7 @@ def transcribe_audio(file_path: str) -> str:
             ])
             return response.text.strip()
         except Exception as e:
-            print(f"  ⚠️ Gemini audio transcription error: {e}")
+            print(f"[Transcribe Warning] Gemini audio transcription: {e}")
 
     raise HTTPException(
         status_code=503,
