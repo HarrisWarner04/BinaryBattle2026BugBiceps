@@ -1,32 +1,83 @@
 """
-Shared OpenAI client for all AI calls.
-Replaces Gemini — uses GPT-4o-mini for text generation and text-embedding-3-small for embeddings.
+Universal AI client supporting Groq, Google Gemini, and OpenAI.
+Priority order for LLM & Speech: Groq -> Gemini -> OpenAI.
+Priority order for Embeddings: Gemini -> OpenAI -> Local Fallback.
 """
 
 import os
 import json
 import time
-from openai import OpenAI
+import math
+import hashlib
+from typing import Optional, Union, List, Dict, Any
 from dotenv import load_dotenv
 from fastapi import HTTPException
 
 load_dotenv()
 
-_client = None
+# Global cached clients
+_openai_client = None
+_groq_client = None
+_gemini_genai_configured = False
 
 
-def _get_client() -> OpenAI:
-    """Get or create the OpenAI client singleton."""
-    global _client
-    if _client is None:
+def get_active_provider() -> str:
+    """Detect which provider is available for LLM."""
+    if os.getenv("GROQ_API_KEY"):
+        return "groq"
+    if os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"):
+        return "gemini"
+    if os.getenv("OPENAI_API_KEY"):
+        return "openai"
+    return "none"
+
+
+def _get_openai_client():
+    """Get standard OpenAI client."""
+    global _openai_client
+    if _openai_client is None:
+        from openai import OpenAI
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             raise HTTPException(
                 status_code=503,
-                detail="OPENAI_API_KEY is not set in backend/.env. Get your key from https://platform.openai.com/api-keys"
+                detail="No AI API key found. Please set GROQ_API_KEY, GEMINI_API_KEY, or OPENAI_API_KEY in backend/.env or Render environment variables."
             )
-        _client = OpenAI(api_key=api_key)
-    return _client
+        _openai_client = OpenAI(api_key=api_key)
+    return _openai_client
+
+
+def _get_groq_client():
+    """Get Groq client via OpenAI-compatible endpoint."""
+    global _groq_client
+    if _groq_client is None:
+        from openai import OpenAI
+        api_key = os.getenv("GROQ_API_KEY")
+        if not api_key:
+            raise HTTPException(
+                status_code=503,
+                detail="GROQ_API_KEY is not set. Get a free API key at https://console.groq.com"
+            )
+        _groq_client = OpenAI(
+            base_url="https://api.groq.com/openai/v1",
+            api_key=api_key
+        )
+    return _groq_client
+
+
+def _init_gemini_genai():
+    """Configure google.generativeai if available."""
+    global _gemini_genai_configured
+    if not _gemini_genai_configured:
+        import google.generativeai as genai
+        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        if not api_key:
+            raise HTTPException(
+                status_code=503,
+                detail="GEMINI_API_KEY is not set. Get a free API key at https://aistudio.google.com"
+            )
+        genai.configure(api_key=api_key)
+        _gemini_genai_configured = True
 
 
 def chat_completion(
@@ -36,37 +87,75 @@ def chat_completion(
     max_retries: int = 3,
 ) -> str:
     """
-    Call OpenAI Chat Completion with automatic retry.
-    Returns the raw text response.
+    Call AI Chat Completion with automatic retry and provider fallback.
+    Supports Groq (Llama 3.3 70B), Gemini (Gemini 2.0 / 1.5 Flash), and OpenAI (GPT-4o-mini).
     """
-    client = _get_client()
+    provider = get_active_provider()
+    if provider == "none":
+        raise HTTPException(
+            status_code=503,
+            detail="No AI API key configured. Set GROQ_API_KEY (free), GEMINI_API_KEY (free), or OPENAI_API_KEY in environment variables."
+        )
+
     last_err = None
 
     for attempt in range(max_retries + 1):
         try:
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=temperature,
-                max_tokens=4096,
-            )
-            return response.choices[0].message.content.strip()
+            if provider == "groq":
+                client = _get_groq_client()
+                response = client.chat.completions.create(
+                    model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=temperature,
+                    max_tokens=4096,
+                )
+                return response.choices[0].message.content.strip()
+
+            elif provider == "gemini":
+                _init_gemini_genai()
+                import google.generativeai as genai
+                model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+                # Try gemini-2.0-flash if configured or fallback to gemini-1.5-flash
+                model = genai.GenerativeModel(
+                    model_name=model_name,
+                    system_instruction=system_prompt if system_prompt else None,
+                    generation_config=genai.types.GenerationConfig(
+                        temperature=temperature,
+                        max_output_tokens=4096,
+                    )
+                )
+                response = model.generate_content(prompt)
+                return response.text.strip()
+
+            else:  # openai
+                client = _get_openai_client()
+                response = client.chat.completions.create(
+                    model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=temperature,
+                    max_tokens=4096,
+                )
+                return response.choices[0].message.content.strip()
+
         except Exception as e:
             last_err = e
             if attempt < max_retries:
                 wait = 2 ** (attempt + 1)
-                print(f"  ⏳ OpenAI error (attempt {attempt + 1}/{max_retries}): {str(e)[:80]}. Retrying in {wait}s...")
+                print(f"  ⏳ {provider.upper()} error (attempt {attempt + 1}/{max_retries}): {str(e)[:80]}. Retrying in {wait}s...")
                 time.sleep(wait)
             else:
                 raise HTTPException(
                     status_code=503,
-                    detail=f"AI service temporarily unavailable: {str(e)[:200]}"
+                    detail=f"AI service ({provider}) temporarily unavailable: {str(e)[:200]}"
                 )
 
-    raise HTTPException(status_code=503, detail=f"OpenAI call failed after {max_retries} retries: {str(last_err)[:200]}")
+    raise HTTPException(status_code=503, detail=f"AI call failed after {max_retries} retries: {str(last_err)[:200]}")
 
 
 def chat_completion_json(
@@ -74,92 +163,200 @@ def chat_completion_json(
     system_prompt: str = "You are a helpful assistant. Return ONLY valid JSON, no markdown, no explanation.",
     temperature: float = 0.0,
     max_retries: int = 3,
-) -> dict | list:
+) -> Union[dict, list]:
     """
-    Call OpenAI and parse the response as JSON.
-    Strips markdown fences if present.
+    Call AI and parse the response as JSON.
+    Strips markdown code fences and cleans output.
     """
     raw = chat_completion(prompt, system_prompt, temperature, max_retries)
 
     # Strip markdown code fences if present
-    if raw.startswith("```"):
+    if "```" in raw:
         lines = raw.split("\n")
-        if lines[0].startswith("```"):
-            lines = lines[1:]
-        if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
-        raw = "\n".join(lines)
+        cleaned_lines = []
+        inside_fence = False
+        for line in lines:
+            if line.strip().startswith("```"):
+                inside_fence = not inside_fence
+                continue
+            cleaned_lines.append(line)
+        raw = "\n".join(cleaned_lines).strip()
 
     try:
         return json.loads(raw)
-    except json.JSONDecodeError as e:
-        # Try to find JSON within the response
-        start = raw.find("{")
-        end = raw.rfind("}") + 1
-        if start >= 0 and end > start:
+    except json.JSONDecodeError:
+        # Try to find JSON object or array within the response
+        start_obj = raw.find("{")
+        end_obj = raw.rfind("}") + 1
+        if start_obj >= 0 and end_obj > start_obj:
             try:
-                return json.loads(raw[start:end])
+                return json.loads(raw[start_obj:end_obj])
             except json.JSONDecodeError:
                 pass
-        # Try array
-        start = raw.find("[")
-        end = raw.rfind("]") + 1
-        if start >= 0 and end > start:
+
+        start_arr = raw.find("[")
+        end_arr = raw.rfind("]") + 1
+        if start_arr >= 0 and end_arr > start_arr:
             try:
-                return json.loads(raw[start:end])
+                return json.loads(raw[start_arr:end_arr])
             except json.JSONDecodeError:
                 pass
+
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to parse AI response as JSON: {str(e)}"
+            detail=f"Failed to parse AI response as JSON: {raw[:150]}"
         )
+
+
+def _local_fallback_embedding(text: str, dim: int = 768) -> list[float]:
+    """Deterministic hash-based dense vector for zero-dependency fallback."""
+    if not text or not text.strip():
+        return [0.0] * dim
+    
+    words = text.lower().split()
+    vec = [0.0] * dim
+    for word in words:
+        h = int(hashlib.md5(word.encode("utf-8")).hexdigest(), 16)
+        idx = h % dim
+        vec[idx] += 1.0
+
+    # L2 normalize
+    norm = math.sqrt(sum(x * x for x in vec))
+    if norm > 0:
+        vec = [x / norm for x in vec]
+    return vec
 
 
 def embed_text(text: str) -> list[float]:
     """
-    Generate an embedding for a single text using OpenAI text-embedding-3-small.
-    Returns a 1536-dimensional vector.
+    Generate an embedding for a single text.
+    Uses Gemini text-embedding-004 if available, OpenAI if available, or local fallback.
     """
     if not text or not text.strip():
-        return [0.0] * 1536
+        return [0.0] * 768
 
-    client = _get_client()
-    try:
-        response = client.embeddings.create(
-            model="text-embedding-3-small",
-            input=text,
-        )
-        return response.data[0].embedding
-    except Exception as e:
-        print(f"  ⚠️ Embedding error: {str(e)[:80]}. Returning zero vector.")
-        return [0.0] * 1536
+    # Option 1: Google Gemini Embedding (Free)
+    if os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"):
+        try:
+            _init_gemini_genai()
+            import google.generativeai as genai
+            result = genai.embed_content(
+                model="models/text-embedding-004",
+                content=text,
+                task_type="retrieval_document"
+            )
+            return result['embedding']
+        except Exception as e:
+            print(f"  ⚠️ Gemini embedding error: {str(e)[:80]}. Trying fallback.")
+
+    # Option 2: OpenAI Embedding
+    if os.getenv("OPENAI_API_KEY"):
+        try:
+            client = _get_openai_client()
+            response = client.embeddings.create(
+                model="text-embedding-3-small",
+                input=text,
+            )
+            return response.data[0].embedding
+        except Exception as e:
+            print(f"  ⚠️ OpenAI embedding error: {str(e)[:80]}. Trying fallback.")
+
+    # Option 3: Local Fallback (Guaranteed to work without API keys or costs)
+    return _local_fallback_embedding(text, dim=768)
 
 
 def embed_text_batch(texts: list[str]) -> list[list[float]]:
     """
-    Generate embeddings for multiple texts in a single batch call.
-    Much more efficient than calling embed_text individually.
+    Generate embeddings for multiple texts in a batch.
     """
     if not texts:
         return []
 
-    # Filter empty texts, track their positions
-    non_empty = [(i, t) for i, t in enumerate(texts) if t and t.strip()]
-    if not non_empty:
-        return [[0.0] * 1536 for _ in texts]
+    # Gemini batch embedding
+    if os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"):
+        try:
+            _init_gemini_genai()
+            import google.generativeai as genai
+            result = genai.embed_content(
+                model="models/text-embedding-004",
+                content=texts,
+                task_type="retrieval_document"
+            )
+            return result['embedding']
+        except Exception as e:
+            print(f"  ⚠️ Gemini batch embedding error: {str(e)[:80]}. Falling back to sequential.")
 
-    client = _get_client()
-    try:
-        response = client.embeddings.create(
-            model="text-embedding-3-small",
-            input=[t for _, t in non_empty],
-        )
+    # OpenAI batch embedding
+    if os.getenv("OPENAI_API_KEY"):
+        try:
+            non_empty = [(i, t) for i, t in enumerate(texts) if t and t.strip()]
+            if not non_empty:
+                return [[0.0] * 1536 for _ in texts]
+            client = _get_openai_client()
+            response = client.embeddings.create(
+                model="text-embedding-3-small",
+                input=[t for _, t in non_empty],
+            )
+            results = [[0.0] * 1536 for _ in texts]
+            for idx, (orig_idx, _) in enumerate(non_empty):
+                results[orig_idx] = response.data[idx].embedding
+            return results
+        except Exception as e:
+            print(f"  ⚠️ OpenAI batch embedding error: {str(e)[:80]}. Falling back.")
 
-        # Map embeddings back to original positions
-        results = [[0.0] * 1536 for _ in texts]
-        for idx, (orig_idx, _) in enumerate(non_empty):
-            results[orig_idx] = response.data[idx].embedding
-        return results
-    except Exception as e:
-        print(f"  ⚠️ Batch embedding error: {str(e)[:80]}. Returning zero vectors.")
-        return [[0.0] * 1536 for _ in texts]
+    return [embed_text(t) for t in texts]
+
+
+def transcribe_audio(file_path: str) -> str:
+    """
+    Transcribe audio file using Groq Whisper (ultra-fast & free), OpenAI Whisper, or Gemini.
+    """
+    # 1. Try Groq Whisper (free, instantaneous)
+    if os.getenv("GROQ_API_KEY"):
+        try:
+            client = _get_groq_client()
+            with open(file_path, "rb") as f:
+                transcription = client.audio.transcriptions.create(
+                    model="whisper-large-v3-turbo",
+                    file=f,
+                    language="en",
+                    prompt="Interview answer about software engineering, projects, and technical skills.",
+                )
+            return transcription.text.strip()
+        except Exception as e:
+            print(f"  ⚠️ Groq Whisper error: {e}")
+
+    # 2. Try OpenAI Whisper
+    if os.getenv("OPENAI_API_KEY"):
+        try:
+            client = _get_openai_client()
+            with open(file_path, "rb") as f:
+                transcription = client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=f,
+                    language="en",
+                    prompt="Interview answer about software engineering, projects, and technical skills.",
+                )
+            return transcription.text.strip()
+        except Exception as e:
+            print(f"  ⚠️ OpenAI Whisper error: {e}")
+
+    # 3. Try Gemini multimodal audio transcription
+    if os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"):
+        try:
+            _init_gemini_genai()
+            import google.generativeai as genai
+            audio_file = genai.upload_file(path=file_path)
+            model = genai.GenerativeModel(model_name="gemini-1.5-flash")
+            response = model.generate_content([
+                "Please transcribe this audio clip accurately. Output ONLY the transcribed English text, nothing else.",
+                audio_file
+            ])
+            return response.text.strip()
+        except Exception as e:
+            print(f"  ⚠️ Gemini audio transcription error: {e}")
+
+    raise HTTPException(
+        status_code=503,
+        detail="Audio transcription failed: No valid Groq, Gemini, or OpenAI API key available."
+    )

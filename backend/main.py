@@ -499,12 +499,11 @@ from services.db_service import (
 
 @app.post("/interview/transcribe")
 async def interview_transcribe(audio: UploadFile = File(...)):
-    """Transcribe audio using OpenAI Whisper API. Replaces broken Web Speech API."""
+    """Transcribe audio using Groq Whisper (free & fast), OpenAI, or Gemini."""
     import tempfile
-    from services.openai_client import _get_client
+    from services.openai_client import transcribe_audio
 
     try:
-        client = _get_client()
         # Write uploaded audio to temp file
         suffix = ".webm"
         if audio.filename:
@@ -515,23 +514,18 @@ async def interview_transcribe(audio: UploadFile = File(...)):
             tmp.write(content)
             tmp_path = tmp.name
 
-        # Transcribe with Whisper
-        with open(tmp_path, "rb") as f:
-            transcription = client.audio.transcriptions.create(
-                model="whisper-1",
-                file=f,
-                language="en",
-                prompt="Interview answer about software engineering, projects, and technical skills.",
-            )
-
-        # Cleanup temp file
         try:
-            os.unlink(tmp_path)
-        except:
-            pass
+            # Transcribe with Whisper (Groq/OpenAI) or Gemini
+            text = transcribe_audio(tmp_path)
+        finally:
+            # Always cleanup temp file
+            if os.path.exists(tmp_path):
+                try:
+                    os.unlink(tmp_path)
+                except Exception:
+                    pass
 
         # Filter common Whisper hallucinations on silence/noise
-        text = transcription.text.strip()
         hallucinations = {
             "shabbat shalom", "thank you for watching", "thanks for watching",
             "please subscribe", "see you next time", "bye bye", "you",
